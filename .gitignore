@@ -1,0 +1,29 @@
+node_modules
+dist
+.vite
+
+# Server secrets and local runtime state
+.env
+.env.local
+server/uploads
+*.tsbuildinfo
+# tsc -b output for vite.config.ts; Vite would prefer a stale .js over the .ts
+vite.config.js
+vite.config.d.ts
+
+# Embedded pglite database (local development)
+.data
+.env.*.local
+.vercel
+
+.vercel
+.env*
+!.env.example
+
+# Local-only files (kept out of the repo)
+/IMG_2835.PNG
+/chatgpt.md
+/claude.md
+/CLAUDE.md
+.agents
+.claude

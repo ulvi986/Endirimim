@@ -1,0 +1,56 @@
+{
+  "name": "endirimim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "api": "tsx server/src/index.ts",
+    "api:dev": "tsx watch server/src/index.ts",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json --noEmit",
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:setup": "tsx server/src/scripts/setup-db.ts",
+    "db:migrate": "tsx server/src/db/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "smoke": "tsx server/src/scripts/smoke.ts",
+    "test:auth": "tsx server/src/scripts/auth-smoke.ts",
+    "db:seed": "tsx server/src/scripts/seed.ts",
+    "user:role": "tsx server/src/scripts/set-role.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@vercel/blob": "^2.8.0",
+    "@vitejs/plugin-react": "latest",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.4",
+    "fastify-plugin": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "latest",
+    "pg": "^8.23.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.5.1",
+    "@types/pg": "^8.23.1",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.13"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

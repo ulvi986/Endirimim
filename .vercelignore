@@ -1,0 +1,11 @@
+/.data
+server/uploads
+.env
+.env.*
+!.env.example
+/dist
+node_modules
+/IMG_2835.PNG
+.agents
+skills-lock.json
+.claude
