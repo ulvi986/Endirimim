@@ -24,7 +24,7 @@ try {
   const request = async (method: 'GET' | 'POST' | 'PATCH', path: string, payload?: object, token?: string) =>
     app.inject({ method, url: `/api/v1${path}`, payload, headers: token ? { authorization: `Bearer ${token}` } : {} })
   const signup = async (email: string, accountType: 'user' | 'store') => {
-    const response = await request('POST', '/auth/register', { email, password, accountType, storeName: 'Test store' })
+    const response = await request('POST', '/auth/register', { email, password, accountType, firstName: 'Test', lastName: 'İstifadəçi', storeName: 'Test store' })
     assert.equal(response.statusCode, 201, response.body)
     const body = response.json()
     assert.ok(body.accessToken)

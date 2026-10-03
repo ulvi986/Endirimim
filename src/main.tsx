@@ -1,9 +1,9 @@
-import { FormEvent, lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { FormEvent, lazy, ReactNode, Suspense, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Bell, ChevronRight, CircleUserRound, ExternalLink, GitCompareArrows, Heart, LayoutDashboard, LogIn, Menu, Search, ShoppingBag, Sparkles, Star, Store, Tag, TrendingDown, X } from 'lucide-react'
+import { ArrowLeft, Bell, ChevronRight, Copy, CircleUserRound, ExternalLink, GitCompareArrows, Heart, LayoutDashboard, LogIn, Menu, Search, ShoppingBag, Sparkles, Star, Store, Tag, TrendingDown, X } from 'lucide-react'
 import type { AuthPath } from './AuthFlow'
-import { api, displayName, homePathFor, logout, type Paginated, type Product, type Session } from './api'
-import { BusyButton, errorMessage, formatPrice, logoSrc, Modal, navigateTo, Notice, ProductPhoto, Spinner, useAsync, useSession } from './ui'
+import { api, ApiError, displayName, homePathFor, logout, type Paginated, type Product, type Session } from './api'
+import { BusyButton, errorMessage, formatDay, formatPrice, logoSrc, Modal, navigateTo, Notice, ProductPhoto, Spinner, useAsync, useSession } from './ui'
 import './styles.css'
 import './connected.css'
 
@@ -70,11 +70,10 @@ function ProductCard({ product, saved, compared, onSave, onCompare, onOpen }: { 
   )
 }
 
-function ProductOffersModal({ product, onClose }: { product: Product; onClose: () => void }) {
+const productPath = (product: Pick<Product, 'slug'>) => `/products/${encodeURIComponent(product.slug)}`
+
+function OfferList({ product }: { product: Product }) {
   const [error, setError] = useState('')
-  useEffect(() => {
-    void api(`/products/${product.id}`).catch(() => undefined)
-  }, [product.id])
   const openOffer = async (offerId: string) => {
     setError('')
     // Open synchronously so the popup is not blocked, then point it at the store.
@@ -91,8 +90,7 @@ function ProductOffersModal({ product, onClose }: { product: Product; onClose: (
     }
   }
   return (
-    <Modal kicker={product.brand?.name.toLocaleUpperCase('az-AZ')} title={product.name} description={product.description ?? undefined} onClose={onClose}>
-      <div className="offer-modal-photo"><ProductPhoto product={product} /></div>
+    <>
       {error && <Notice>{error}</Notice>}
       <div className="offer-list">
         {product.offers.length === 0 && <p className="muted">Bu məhsul üçün hələ təklif yoxdur.</p>}
@@ -113,7 +111,44 @@ function ProductOffersModal({ product, onClose }: { product: Product; onClose: (
           </div>
         ))}
       </div>
+    </>
+  )
+}
+
+function ProductOffersModal({ product, onClose }: { product: Product; onClose: () => void }) {
+  useEffect(() => {
+    void api(`/products/${product.id}`).catch(() => undefined)
+  }, [product.id])
+  return (
+    <Modal kicker={product.brand?.name.toLocaleUpperCase('az-AZ')} title={product.name} description={product.description ?? undefined} onClose={onClose}>
+      <div className="offer-modal-photo"><ProductPhoto product={product} /></div>
+      <OfferList product={product} />
+      <div className="share-row"><a className="workspace-secondary" href={productPath(product)}>Məhsul səhifəsini aç <ExternalLink size={13} /></a></div>
     </Modal>
+  )
+}
+
+type PricePoint = { day: string; minPrice: number }
+
+/** Draws real price history; with fewer than two days of data there is no trend to show. */
+function PriceChart({ productId }: { productId?: string }) {
+  const history = useAsync(async () => (productId ? (await api<{ points: PricePoint[] }>(`/products/${productId}/price-history?days=30`)).points : []), [productId])
+  const points = history.data ?? []
+  if (history.loading && productId) return <div className="chart-empty"><Spinner label="Qrafik yüklənir…" /></div>
+  if (points.length < 2) {
+    return <div className="chart-empty"><strong>Qiymət tarixçəsi hələ yoxdur</strong><span>{productId ? 'Qiymət dəyişdikcə son 30 günün qrafiki burada görünəcək.' : 'Məhsullar əlavə olunduqca qiymət qrafiki burada görünəcək.'}</span></div>
+  }
+  const prices = points.map((point) => point.minPrice)
+  const min = Math.min(...prices)
+  const span = Math.max(...prices) - min || 1
+  const line = points
+    .map((point, index) => `${index ? 'L' : 'M'}${Math.round((index / (points.length - 1)) * 500)} ${Math.round(130 - ((point.minPrice - min) / span) * 110)}`)
+    .join(' ')
+  return (
+    <>
+      <svg viewBox="0 0 500 150" preserveAspectRatio="none" role="img" aria-label="Son 30 günün qiymət qrafiki"><path d={line} fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><path d={`${line} V150 H0Z`} fill="url(#chartFill)" opacity=".14" /><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#f97316" /><stop offset="1" stopColor="#fff" /></linearGradient></defs></svg>
+      <div className="chart-labels"><span>{formatDay(`${points[0]!.day}T00:00:00`)}</span><span>{formatDay(`${points[points.length - 1]!.day}T00:00:00`)}</span></div>
+    </>
   )
 }
 
@@ -227,6 +262,7 @@ function Home() {
   const session = useSession()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
+  const [dealsOnly, setDealsOnly] = useState(false)
   const [showAlert, setShowAlert] = useState<{ productId?: string } | null>(null)
   const [openProduct, setOpenProduct] = useState<Product | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -241,8 +277,9 @@ function Home() {
     const params = new URLSearchParams({ limit: '12', sort: search ? 'best_price' : 'biggest_discount' })
     if (search) params.set('q', search)
     if (category) params.set('category', category)
+    if (dealsOnly) params.set('hasDiscount', 'true')
     return api<Paginated<Product>>(`/products?${params}`)
-  }, [search, category])
+  }, [search, category, dealsOnly])
   const featured = useAsync(async () => (await api<Paginated<Product>>('/products?limit=24&sort=biggest_discount')).items, [])
 
   useEffect(() => {
@@ -300,8 +337,9 @@ function Home() {
     }
   }
 
-  const pickCategory = (slug: string) => {
+  const pickCategory = (slug: string, deals = false) => {
     setCategory(slug)
+    setDealsOnly(deals)
     setMenuOpen(false)
     document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -323,9 +361,9 @@ function Home() {
         </div>
         <div className="category-nav">
           <div className="container nav-inner">
-            <button type="button" className={`all-categories ${category === '' ? 'active' : ''}`} onClick={() => pickCategory('')}><Menu size={17} /> Bütün kateqoriyalar</button>
+            <button type="button" className={`all-categories ${category === '' && !dealsOnly ? 'active' : ''}`} onClick={() => pickCategory('')}><Menu size={17} /> Bütün kateqoriyalar</button>
             {rootCategories.map((item) => <button type="button" key={item.id} className={category === item.slug ? 'active' : ''} onClick={() => pickCategory(item.slug)}>{item.name}</button>)}
-            <button type="button" className="nav-deal" onClick={() => pickCategory('')}><Tag size={15} /> Günün endirimləri</button>
+            <button type="button" className={`nav-deal ${dealsOnly ? 'active' : ''}`} aria-pressed={dealsOnly} onClick={() => pickCategory('', true)}><Tag size={15} /> Günün endirimləri</button>
           </div>
         </div>
       </header>
@@ -378,11 +416,11 @@ function Home() {
             <div className="section-heading">
               <div>
                 <span className="section-kicker orange">{search ? 'Axtarış nəticələri' : 'Seçilmiş təkliflər'}</span>
-                <h2>{search ? `“${search}”` : categoryName ?? 'Bu günün ən yaxşıları'}</h2>
+                <h2>{search ? `“${search}”` : categoryName ?? (dealsOnly ? 'Günün endirimləri' : 'Bu günün ən yaxşıları')}</h2>
               </div>
               <div className="filter-tabs">
-                <button type="button" className={category === '' ? 'active' : ''} onClick={() => setCategory('')}>Hamısı</button>
-                {rootCategories.filter((item) => item.productCount > 0).slice(0, 4).map((item) => <button type="button" className={category === item.slug ? 'active' : ''} onClick={() => setCategory(item.slug)} key={item.id}>{item.name}</button>)}
+                <button type="button" className={category === '' && !dealsOnly ? 'active' : ''} onClick={() => { setCategory(''); setDealsOnly(false) }}>Hamısı</button>
+                {rootCategories.filter((item) => item.productCount > 0).slice(0, 4).map((item) => <button type="button" className={category === item.slug ? 'active' : ''} onClick={() => { setCategory(item.slug); setDealsOnly(false) }} key={item.id}>{item.name}</button>)}
               </div>
             </div>
             {actionError && <Notice onClose={() => setActionError('')}>{actionError}</Notice>}
@@ -397,7 +435,11 @@ function Home() {
               </div>
             ) : (
               !products.error && (
-                <div className="empty-state"><Search size={30} /><strong>Bu axtarışla məhsul tapılmadı</strong><span>Başqa bir marka və ya kateqoriya yoxla.</span>{(search || category) && <button type="button" className="outline-button" onClick={() => { setQuery(''); setCategory('') }}>Filtrləri təmizlə</button>}</div>
+                search || category || dealsOnly ? (
+                  <div className="empty-state"><Search size={30} /><strong>{search ? 'Bu axtarışla məhsul tapılmadı' : dealsOnly ? 'Hazırda endirimli məhsul yoxdur' : 'Bu kateqoriyada məhsul yoxdur'}</strong><span>Başqa bir marka və ya kateqoriya yoxla.</span><button type="button" className="outline-button" onClick={() => { setQuery(''); setCategory(''); setDealsOnly(false) }}>Filtrləri təmizlə</button></div>
+                ) : (
+                  <div className="empty-state"><ShoppingBag size={30} /><strong>Hələ məhsul yoxdur</strong><span>Mağazalar məhsul əlavə etdikcə burada görünəcək.</span></div>
+                )
               )
             )}
           </div>
@@ -408,13 +450,13 @@ function Home() {
             <span className="section-kicker">Endirimim Radar</span>
             <h2>Qiymət düşəndə<br /><em>sənə xəbər edək.</em></h2>
             <p>İzləmək istədiyin məhsulu seç, hədəf qiymətini təyin et. Qiymət düşən kimi ilk sən bil.</p>
-            <button type="button" className="orange-button" onClick={() => requireLogin() && setShowAlert({ productId: heroProduct?.id })}><Bell size={17} /> Qiymət xəbərdarlığı qur</button>
+            <button type="button" className="orange-button" disabled={featured.loading || allProducts.length === 0} onClick={() => requireLogin() && setShowAlert({ productId: heroProduct?.id })}><Bell size={17} /> Qiymət xəbərdarlığı qur</button>
+            {!featured.loading && allProducts.length === 0 && <p className="insight-note">Hələ izlənəcək məhsul yoxdur. Məhsullar əlavə olunanda xəbərdarlıq qura biləcəksiniz.</p>}
           </div>
           <div className="insight-chart">
             <div className="chart-header"><span>{heroProduct?.name ?? 'Qiymət tarixçəsi'}</span>{heroProduct && heroProduct.maxDiscountPercentage > 0 && <strong>-{Math.round(heroProduct.maxDiscountPercentage)}%</strong>}</div>
             <div className="chart-price">{formatPrice(heroProduct?.bestPrice)} <small>ən aşağı qiymət</small></div>
-            <svg viewBox="0 0 500 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 115 C35 110 48 95 82 105 S124 128 160 88 S202 94 230 77 S278 92 315 60 S354 76 389 40 S434 53 500 18" fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" /><path d="M0 115 C35 110 48 95 82 105 S124 128 160 88 S202 94 230 77 S278 92 315 60 S354 76 389 40 S434 53 500 18 V150 H0Z" fill="url(#chartFill)" opacity=".14" /><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#f97316" /><stop offset="1" stopColor="#fff" /></linearGradient></defs></svg>
-            <div className="chart-labels"><span>30 gün əvvəl</span><span>Bu gün</span></div>
+            <PriceChart productId={heroProduct?.id} />
           </div>
         </section>
 
@@ -433,6 +475,82 @@ function Home() {
       {menuOpen && <MobileMenu session={session} categories={rootCategories} onPick={pickCategory} onClose={() => setMenuOpen(false)} />}
       <footer><div className="container footer-inner"><a className="logo" href="/"><img className="brand-logo-image" src={logoSrc} alt="Endirimim" /><span>Endirimim<span className="logo-dot">.</span></span></a><span>Ən yaxşı qiymət, daha ağıllı seçim.</span><span className="footer-copy">© 2026 Endirimim</span></div></footer>
     </div>
+  )
+}
+
+function SimplePage({ children }: { children: ReactNode }) {
+  return (
+    <div className="simple-page">
+      <header className="simple-page-header"><div className="container"><a className="logo" href="/"><img className="brand-logo-image" src={logoSrc} alt="Endirimim" /><span>Endirimim<span className="logo-dot">.</span></span></a><a className="back-link" href="/"><ArrowLeft size={15} /> Ana səhifə</a></div></header>
+      <main><div className="container">{children}</div></main>
+      <footer><div className="container footer-inner"><span>Ən yaxşı qiymət, daha ağıllı seçim.</span><span className="footer-copy">© 2026 Endirimim</span></div></footer>
+    </div>
+  )
+}
+
+function NotFound({ title = 'Səhifə tapılmadı', description = 'Axtardığınız səhifə mövcud deyil və ya köçürülüb.' }: { title?: string; description?: string }) {
+  useEffect(() => {
+    document.title = `${title} · Endirimim`
+  }, [title])
+  return (
+    <SimplePage>
+      <div className="not-found" role="alert">
+        <b>404</b>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        <a className="orange-button" href="/">Ana səhifəyə qayıt</a>
+      </div>
+    </SimplePage>
+  )
+}
+
+/** Shareable product page: /products/:slug (an id works too). */
+function ProductPage({ idOrSlug }: { idOrSlug: string }) {
+  const product = useAsync(async () => {
+    try {
+      return await api<Product>(`/products/${encodeURIComponent(idOrSlug)}`)
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) return null
+      throw caught
+    }
+  }, [idOrSlug])
+  const [copied, setCopied] = useState(false)
+  const data = product.data
+
+  useEffect(() => {
+    if (data) document.title = `${data.name} · Endirimim`
+  }, [data])
+
+  if (data === null) return <NotFound title="Məhsul tapılmadı" description="Bu məhsul silinib və ya keçid səhvdir." />
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <SimplePage>
+      {product.error && <Notice>{product.error} <button type="button" className="text-link-inline" onClick={() => void product.reload()}>Yenidən cəhd et</button></Notice>}
+      {!data ? (!product.error && <Spinner label="Məhsul yüklənir…" />) : (
+        <article className="product-page">
+          <div className="product-page-photo"><ProductPhoto product={data} /></div>
+          <div className="product-page-copy">
+            <span className="section-kicker">{data.brand?.name ?? data.category?.name ?? 'Endirimim'}</span>
+            <h1>{data.name}</h1>
+            {data.description && <p>{data.description}</p>}
+            <div className="product-page-price">{formatPrice(data.bestPrice)} <small>{data.offerCount} mağazada</small></div>
+            <OfferList product={data} />
+            <div className="share-row">
+              <button type="button" className="workspace-secondary" onClick={() => void copyLink()}><Copy size={13} /> {copied ? 'Keçid kopyalandı' : 'Keçidi kopyala'}</button>
+            </div>
+          </div>
+        </article>
+      )}
+    </SimplePage>
   )
 }
 
@@ -469,7 +587,10 @@ function App() {
     )
   }
   if (USER_PATHS.includes(path) || STORE_PATHS.includes(path)) return <Workspace path={path} />
-  return <Home />
+  const productMatch = /^\/products\/([^/]+)$/.exec(path)
+  if (productMatch) return <ProductPage idOrSlug={decodeURIComponent(productMatch[1]!)} />
+  if (path === '/' || path === '/index.html') return <Home />
+  return <NotFound />
 }
 
 export default App

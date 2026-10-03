@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { ArrowRight, Bell, Check, CheckCircle2, ChevronRight, Heart, LayoutDashboard, ListPlus, LockKeyhole, LogOut, Mail, Pause, Pencil, Play, Plus, Save, Settings, ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Store, Trash2, TrendingDown, X } from 'lucide-react'
 import { api, displayName, initials, loadMe, type Paginated, type Product, type Session } from './api'
-import { BusyButton, errorMessage, FormField, formatDateTime, formatPrice, Modal, navigateTo, Notice, ProductPhoto, Spinner, useAsync } from './ui'
+import { BusyButton, ConfirmModal, errorMessage, FormField, formatDateTime, formatPrice, Modal, navigateTo, Notice, ProductPhoto, Spinner, useAsync } from './ui'
 import { signOut, useWorkspaceRoute, WorkspaceShell, type NavItem } from './WorkspaceShell'
 
 type AuthenticatedSession = Extract<Session, { status: 'authenticated' }>
@@ -211,6 +211,8 @@ function ListDetailModal({ listId, onClose, onError }: { listId: string; onClose
   const catalog = useAsync(async () => (await api<Paginated<Product>>('/products?limit=100&sort=name')).items, [])
   const [adding, setAdding] = useState('')
   const [renaming, setRenaming] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const act = async (action: () => Promise<unknown>) => {
@@ -226,6 +228,32 @@ function ListDetailModal({ listId, onClose, onError }: { listId: string; onClose
   }
 
   if (renaming && detail.data) return <ListNameModal list={detail.data} onClose={() => setRenaming(false)} onSaved={() => { setRenaming(false); void detail.reload() }} />
+
+  const deleteList = async () => {
+    setBusy(true)
+    setDeleteError('')
+    try {
+      await api(`/lists/${listId}`, { method: 'DELETE' })
+      onClose()
+    } catch (caught) {
+      setDeleteError(errorMessage(caught))
+      setBusy(false)
+    }
+  }
+
+  if (confirmingDelete) {
+    return (
+      <ConfirmModal
+        title="Siyahı silinsin?"
+        description={`“${detail.data?.name ?? 'Siyahı'}” və içindəki bütün məhsullar silinəcək. Bu əməliyyat geri qaytarılmır.`}
+        confirmLabel="Siyahını sil"
+        busy={busy}
+        error={deleteError}
+        onConfirm={() => void deleteList()}
+        onClose={() => { setConfirmingDelete(false); setDeleteError('') }}
+      />
+    )
+  }
 
   const inList = new Set(detail.data?.items.map((item) => item.id))
   return (
@@ -255,7 +283,7 @@ function ListDetailModal({ listId, onClose, onError }: { listId: string; onClose
             <BusyButton busy={busy} type="button" disabled={!adding} onClick={() => void act(async () => { await api(`/lists/${listId}/items`, { method: 'POST', body: { productId: adding, quantity: 1 } }); setAdding('') })}><Plus size={15} /> Əlavə et</BusyButton>
           </div>
           <div className="modal-actions spread">
-            <button type="button" className="danger-link" disabled={busy} onClick={() => void act(async () => { await api(`/lists/${listId}`, { method: 'DELETE' }); onClose() })}><Trash2 size={14} /> Siyahını sil</button>
+            <button type="button" className="danger-link" disabled={busy} onClick={() => setConfirmingDelete(true)}><Trash2 size={14} /> Siyahını sil</button>
             <div><button type="button" className="workspace-secondary" onClick={() => setRenaming(true)}><Pencil size={14} /> Adını dəyiş</button> <button type="button" className="workspace-primary" onClick={onClose}>Hazırdır</button></div>
           </div>
         </>
@@ -521,9 +549,10 @@ function Profile({ session }: { session: AuthenticatedSession }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!values.firstName.trim()) return setNotice({ tone: 'error', text: 'Ad boş ola bilməz.' })
+    if (!values.lastName.trim()) return setNotice({ tone: 'error', text: 'Soyad boş ola bilməz.' })
     setBusy(true)
     try {
-      await api('/users/me', { method: 'PATCH', body: { firstName: values.firstName.trim(), lastName: values.lastName.trim() || null } })
+      await api('/users/me', { method: 'PATCH', body: { firstName: values.firstName.trim(), lastName: values.lastName.trim() } })
       await loadMe()
       setEditing(false)
       setNotice({ tone: 'success', text: 'Profil məlumatları yadda saxlanıldı.' })

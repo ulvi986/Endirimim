@@ -144,6 +144,19 @@ export function Modal({ kicker, title, description, onClose, children }: { kicke
   )
 }
 
+/** In-page confirmation for destructive actions; `window.confirm` blocks the page and cannot be styled. */
+export function ConfirmModal({ title, description, confirmLabel = 'Sil', busy = false, error, onConfirm, onClose }: { title: string; description: string; confirmLabel?: string; busy?: boolean; error?: string; onConfirm: () => void; onClose: () => void }) {
+  return (
+    <Modal kicker="TƏSDİQ" title={title} description={description} onClose={busy ? () => undefined : onClose}>
+      {error && <Notice>{error}</Notice>}
+      <div className="modal-actions">
+        <button type="button" className="workspace-secondary" onClick={onClose} disabled={busy}>Ləğv et</button>
+        <BusyButton busy={busy} type="button" className="workspace-danger" onClick={onConfirm}>{confirmLabel}</BusyButton>
+      </div>
+    </Modal>
+  )
+}
+
 export function FormField({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="ui-field">

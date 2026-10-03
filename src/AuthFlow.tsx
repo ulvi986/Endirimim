@@ -134,6 +134,7 @@ function SignupForm({ accountType, onBack, onComplete }: { accountType: AccountT
     if (password !== values.confirmPassword) next.confirmPassword = 'Şifrələr uyğun gəlmir.'
     if (isStore && (values.storeName ?? '').trim().length < 2) next.storeName = 'Mağaza adı ən azı 2 simvol olmalıdır.'
     if (!isStore && !(values.firstName ?? '').trim()) next.firstName = 'Ad tələb olunur.'
+    if (!isStore && !(values.lastName ?? '').trim()) next.lastName = 'Soyad tələb olunur.'
     if (!accepted) next.terms = 'Davam etmək üçün şərtləri qəbul edin.'
     setErrors(next)
     return Object.keys(next).length === 0
@@ -184,7 +185,7 @@ function SignupForm({ accountType, onBack, onComplete }: { accountType: AccountT
         ) : (
           <>
             <Field label="Ad" name="firstName" placeholder="Adınız" value={values.firstName ?? ''} onChange={setValue('firstName')} error={errors.firstName} autoComplete="given-name" />
-            <Field label="Soyad" name="lastName" placeholder="Soyadınız" value={values.lastName ?? ''} onChange={setValue('lastName')} required={false} autoComplete="family-name" />
+            <Field label="Soyad" name="lastName" placeholder="Soyadınız" value={values.lastName ?? ''} onChange={setValue('lastName')} error={errors.lastName} autoComplete="family-name" />
           </>
         )}
         <Field label="Email" name="email" type="email" placeholder="siz@email.com" value={values.email ?? ''} onChange={setValue('email')} error={errors.email} autoComplete="email" />

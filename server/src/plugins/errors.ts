@@ -4,6 +4,9 @@ import { ZodError } from 'zod'
 import { env } from '../config/env.js'
 import { driverErrorCode } from '../lib/db-errors.js'
 import { AppError } from '../lib/errors.js'
+import { installZodMessages } from '../lib/zod-messages.js'
+
+installZodMessages()
 
 function mapDatabaseError(error: unknown): AppError | undefined {
   switch (driverErrorCode(error)) {

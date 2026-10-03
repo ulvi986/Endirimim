@@ -81,6 +81,9 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     if (body.accountType === 'store' && !body.storeName) {
       throw badRequest('Mağaza adı tələb olunur.')
     }
+    if (body.accountType === 'user' && (!body.firstName || !body.lastName)) {
+      throw badRequest(!body.firstName ? 'Ad tələb olunur.' : 'Soyad tələb olunur.')
+    }
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
     if (existing) throw conflict('Bu email ünvanı artıq qeydiyyatdadır.')

@@ -26,8 +26,9 @@ export default async function userRoutes(app: FastifyInstance): Promise<void> {
     const auth = requireAuth(request)
     const body = z
       .object({
-        firstName: z.string().trim().min(1).max(80).nullish(),
-        lastName: z.string().trim().min(1).max(80).nullish(),
+        // Names can be changed but not cleared: both are required on the profile.
+        firstName: z.string().trim().min(1).max(80).optional(),
+        lastName: z.string().trim().min(1).max(80).optional(),
         avatarUrl: httpUrl(500).nullish(),
       })
       .parse(request.body)
